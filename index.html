@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contador de Fichas de Pôquer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes chip-shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        @keyframes chip-glow {
+            0%, 100% { box-shadow: 0 20px 40px rgba(0,0,0,0.3), inset 0 2px 8px rgba(255,255,255,0.2); }
+            50% { box-shadow: 0 20px 40px rgba(0,0,0,0.3), inset 0 2px 8px rgba(255,255,255,0.2), 0 0 30px rgba(255,215,0,0.8); }
+        }
+
+        .chip-shake {
+            animation: chip-shake 0.8s ease-in-out;
+        }
+
+        .chip-glow {
+            animation: chip-glow 0.8s ease-in-out;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            max-width: 24rem;
+            width: 90%;
+            margin: 1rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-green-800 to-green-900">
+    <!-- Initial Setup Screen -->
+    <div id="setupScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md p-6 bg-white/95 backdrop-blur rounded-lg">
+            <div class="text-center space-y-6">
+                <div class="space-y-2">
+                    <h1 class="text-2xl font-bold text-gray-900">Contador de Fichas</h1>
+                    <p class="text-gray-600">Defina suas fichas iniciais</p>
+                </div>
+                <div class="space-y-4">
+                    <div class="space-y-2">
+                        <label for="initialChips" class="block text-sm font-medium text-gray-700">Fichas Iniciais</label>
+                        <input
+                            id="initialChips"
+                            type="number"
+                            placeholder="100"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-center text-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                    </div>
+                    <button
+                        onclick="startGame()"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-md text-lg font-semibold transition-colors"
+                    >
+                        Começar Jogo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Game Screen -->
+    <div id="gameScreen" class="hidden min-h-screen p-4">
+        <div class="max-w-md mx-auto space-y-8 pt-8">
+            <!-- Main Chip Display -->
+            <div class="flex justify-center">
+                <div id="mainChip" class="relative w-64 h-64 rounded-full flex items-center justify-center shadow-2xl transform transition-all duration-300">
+                    <!-- Outer dashed border ring -->
+                    <div class="absolute inset-2 rounded-full border-4 border-dashed border-white/80"></div>
+                    
+                    <!-- Inner decorative dots pattern -->
+                    <div class="absolute inset-6 rounded-full" id="chipDots"></div>
+                    
+                    <!-- Center content -->
+                    <div class="relative z-10 text-center">
+                        <div id="chipValue" class="text-5xl font-black drop-shadow-lg">0</div>
+                        <div id="chipLabel" class="text-sm font-semibold opacity-90 tracking-wider">FICHAS</div>
+                    </div>
+                    
+                    <!-- Inner highlight ring -->
+                    <div class="absolute inset-8 rounded-full border-2 border-white/30"></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-4">
+                <button
+                    id="betButton"
+                    onclick="openModal('bet')"
+                    class="h-16 bg-red-500 hover:bg-red-600 text-white text-lg font-semibold rounded-md flex items-center justify-center transition-colors"
+                >
+                    <span class="mr-2">−</span>
+                    Apostar
+                </button>
+                <button
+                    onclick="openModal('win')"
+                    class="h-16 bg-green-600 hover:bg-green-700 text-white text-lg font-semibold rounded-md flex items-center justify-center transition-colors"
+                >
+                    <span class="mr-2">+</span>
+                    Ganhar
+                </button>
+            </div>
+
+            <!-- History -->
+            <div id="historyCard" class="hidden p-4 bg-white/95 backdrop-blur rounded-lg">
+                <h3 class="font-semibold mb-3 text-gray-900">Últimas Jogadas</h3>
+                <div id="historyList" class="space-y-2"></div>
+            </div>
+
+            <!-- Reset Button -->
+            <button
+                onclick="resetGame()"
+                class="w-full bg-white/10 border border-white/20 text-white hover:bg-white/20 py-2 px-4 rounded-md transition-colors"
+            >
+                Reiniciar Jogo
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="chipModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle" class="text-xl font-semibold text-center mb-4">Quanto apostar?</h2>
+            <div class="grid grid-cols-2 gap-3" id="chipButtons"></div>
+            <button onclick="closeModal()" class="mt-4 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition-colors">
+                Cancelar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let totalChips = 0;
+        let history = [];
+        let currentModalType = 'bet';
+        const chipValues = [1, 5, 25, 100, 500, 1000];
+
+        function getChipColor(total) {
+            if (total >= 1000) return { bg: 'bg-yellow-400', text: 'text-yellow-900', gradient: '#fbbf24, #f59e0b, #d97706' };
+            if (total >= 500) return { bg: 'bg-purple-500', text: 'text-white', gradient: '#8b5cf6, #7c3aed, #6d28d9' };
+            if (total >= 100) return { bg: 'bg-gray-800', text: 'text-white', gradient: '#374151, #1f2937, #111827' };
+            if (total >= 25) return { bg: 'bg-green-600', text: 'text-white', gradient: '#059669, #047857, #065f46' };
+            if (total >= 5) return { bg: 'bg-red-500', text: 'text-white', gradient: '#dc2626, #b91c1c, #991b1b' };
+            return { bg: 'bg-white', text: 'text-gray-900', gradient: '#f9fafb, #f3f4f6, #e5e7eb' };
+        }
+
+        function updateChipDisplay() {
+            const chipColor = getChipColor(totalChips);
+            const mainChip = document.getElementById('mainChip');
+            const chipValue = document.getElementById('chipValue');
+            const chipLabel = document.getElementById('chipLabel');
+            
+            mainChip.style.background = `radial-gradient(circle at 30% 30%, ${chipColor.gradient})`;
+            mainChip.style.boxShadow = '0 20px 40px rgba(0,0,0,0.3), inset 0 2px 8px rgba(255,255,255,0.2)';
+            
+            chipValue.textContent = totalChips;
+            chipValue.className = `text-5xl font-black drop-shadow-lg ${chipColor.text}`;
+            chipLabel.className = `text-sm font-semibold opacity-90 tracking-wider ${chipColor.text}`;
+            
+            // Update bet button state
+            document.getElementById('betButton').disabled = totalChips === 0;
+            if (totalChips === 0) {
+                document.getElementById('betButton').className = 'h-16 bg-gray-400 text-white text-lg font-semibold rounded-md flex items-center justify-center cursor-not-allowed';
+            } else {
+                document.getElementById('betButton').className = 'h-16 bg-red-500 hover:bg-red-600 text-white text-lg font-semibold rounded-md flex items-center justify-center transition-colors';
+            }
+        }
+
+        function createChipDots() {
+            const dotsContainer = document.getElementById('chipDots');
+            dotsContainer.innerHTML = '';
+            
+            for (let i = 0; i < 12; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'absolute w-3 h-3 bg-white/60 rounded-full';
+                dot.style.top = '50%';
+                dot.style.left = '50%';
+                dot.style.transform = `translate(-50%, -50%) rotate(${i * 30}deg) translateY(-85px)`;
+                dotsContainer.appendChild(dot);
+            }
+        }
+
+        function startGame() {
+            const initialChipsInput = document.getElementById('initialChips');
+            totalChips = parseInt(initialChipsInput.value) || 100;
+            
+            document.getElementById('setupScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            
+            createChipDots();
+            updateChipDisplay();
+        }
+
+        function resetGame() {
+            totalChips = 0;
+            history = [];
+            document.getElementById('setupScreen').classList.remove('hidden');
+            document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('initialChips').value = '';
+            updateHistoryDisplay();
+        }
+
+        function openModal(type) {
+            currentModalType = type;
+            const modal = document.getElementById('chipModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const chipButtons = document.getElementById('chipButtons');
+            
+            modalTitle.textContent = type === 'bet' ? 'Quanto apostar?' : 'Quanto ganhou?';
+            
+            chipButtons.innerHTML = '';
+            chipValues.forEach(value => {
+                const canUse = type === 'win' || totalChips >= value;
+                const chipColor = getChipColor(value);
+                
+                const button = document.createElement('button');
+                button.textContent = value;
+                button.onclick = () => handleChipAction(value);
+                button.disabled = !canUse;
+                button.className = `h-16 rounded-full border-4 font-bold text-lg transition-transform hover:scale-105 ${chipColor.bg} ${chipColor.text} ${!canUse ? 'opacity-50 cursor-not-allowed' : ''}`;
+                
+                chipButtons.appendChild(button);
+            });
+            
+            modal.classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('chipModal').classList.remove('show');
+        }
+
+        function handleChipAction(amount) {
+            const action = {
+                type: currentModalType,
+                amount: amount,
+                timestamp: new Date()
+            };
+
+            if (currentModalType === 'bet') {
+                totalChips = Math.max(0, totalChips - amount);
+                document.getElementById('mainChip').classList.add('chip-shake');
+            } else {
+                totalChips += amount;
+                document.getElementById('mainChip').classList.add('chip-glow');
+            }
+
+            history.unshift(action);
+            if (history.length > 5) {
+                history = history.slice(0, 5);
+            }
+
+            updateChipDisplay();
+            updateHistoryDisplay();
+            closeModal();
+
+            // Remove animation after it completes
+            setTimeout(() => {
+                document.getElementById('mainChip').classList.remove('chip-shake', 'chip-glow');
+            }, 800);
+        }
+
+        function updateHistoryDisplay() {
+            const historyCard = document.getElementById('historyCard');
+            const historyList = document.getElementById('historyList');
+            
+            if (history.length === 0) {
+                historyCard.classList.add('hidden');
+                return;
+            }
+            
+            historyCard.classList.remove('hidden');
+            historyList.innerHTML = '';
+            
+            history.forEach(action => {
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center text-sm';
+                
+                const actionText = document.createElement('span');
+                actionText.className = action.type === 'win' ? 'text-green-600' : 'text-red-600';
+                actionText.textContent = `${action.type === 'win' ? '+' : '-'}${action.amount} fichas`;
+                
+                const timeText = document.createElement('span');
+                timeText.className = 'text-gray-500';
+                timeText.textContent = action.timestamp.toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                item.appendChild(actionText);
+                item.appendChild(timeText);
+                historyList.appendChild(item);
+            });
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('chipModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
