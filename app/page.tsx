@@ -6,10 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
-import { Minus, Plus } from "lucide-react"
+import { Minus, Plus, X, Zap } from "lucide-react"
 
 interface GameAction {
-  type: "bet" | "win"
+  type: "bet" | "win" | "fold" | "allin"
   amount: number
   timestamp: Date
 }
@@ -36,14 +36,17 @@ const getChipGradient = (total: number) => {
 
 export default function PokerChipCounter() {
   const [totalChips, setTotalChips] = useState<number>(0)
+  const [pot, setPot] = useState<number>(0) // Added pot state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState<"bet" | "win">("bet")
   const [history, setHistory] = useState<GameAction[]>([])
   const [isInitialSetup, setIsInitialSetup] = useState(true)
   const [initialChips, setInitialChips] = useState("")
   const [chipAnimation, setChipAnimation] = useState("")
+  const [potAnimation, setPotAnimation] = useState("") // Added pot animation state
 
   const chipColor = getChipColor(totalChips)
+  const potColor = getChipColor(pot) // Added pot color
 
   const handleInitialSetup = () => {
     const chips = Number.parseInt(initialChips) || 100
@@ -59,18 +62,64 @@ export default function PokerChipCounter() {
     }
 
     if (modalType === "bet") {
-      setTotalChips((prev) => Math.max(0, prev - amount))
+      const betAmount = Math.min(amount, totalChips)
+      setTotalChips((prev) => prev - betAmount)
+      setPot((prev) => prev + betAmount) // Add bet to pot
       setChipAnimation("chip-shake")
+      setPotAnimation("chip-glow") // Animate pot when betting
+      newAction.amount = betAmount
     } else {
-      setTotalChips((prev) => prev + amount)
+      const potReturn = pot
+      const bonusAmount = amount
+      setTotalChips((prev) => prev + potReturn + bonusAmount)
+      setPot(0) // Clear pot when winning
       setChipAnimation("chip-glow")
+      newAction.amount = potReturn + bonusAmount
     }
 
     setHistory((prev) => [newAction, ...prev.slice(0, 4)])
     setIsModalOpen(false)
 
-    // Remove animation after it completes
-    setTimeout(() => setChipAnimation(""), 800)
+    // Remove animations after they complete
+    setTimeout(() => {
+      setChipAnimation("")
+      setPotAnimation("")
+    }, 800)
+  }
+
+  const handleFold = () => {
+    const newAction: GameAction = {
+      type: "fold",
+      amount: pot,
+      timestamp: new Date(),
+    }
+
+    setPot(0) // Clear pot
+    setHistory((prev) => [newAction, ...prev.slice(0, 4)])
+    setPotAnimation("chip-shake")
+
+    setTimeout(() => setPotAnimation(""), 800)
+  }
+
+  const handleAllIn = () => {
+    if (totalChips === 0) return
+
+    const newAction: GameAction = {
+      type: "allin",
+      amount: totalChips,
+      timestamp: new Date(),
+    }
+
+    setPot((prev) => prev + totalChips)
+    setTotalChips(0)
+    setHistory((prev) => [newAction, ...prev.slice(0, 4)])
+    setChipAnimation("chip-shake")
+    setPotAnimation("chip-glow")
+
+    setTimeout(() => {
+      setChipAnimation("")
+      setPotAnimation("")
+    }, 800)
   }
 
   const openModal = (type: "bet" | "win") => {
@@ -118,6 +167,41 @@ export default function PokerChipCounter() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-800 to-green-900 p-4">
       <div className="max-w-md mx-auto space-y-8 pt-8">
+        <div className="absolute top-4 left-4">
+          <div className="bg-gradient-to-b from-amber-100 to-amber-200 rounded-lg p-3 shadow-xl border-2 border-amber-300 min-w-[120px]">
+            {/* Pot label */}
+            <div className="text-center mb-2">
+              <div className="text-amber-800 text-sm font-bold tracking-wider">POTE</div>
+            </div>
+
+            {/* Large pot value */}
+            <div className="text-center mb-3">
+              <div className="text-3xl font-black text-amber-900">{pot}</div>
+            </div>
+
+            {/* Visual chips inside the pot */}
+            <div className="flex justify-center items-end space-x-1 h-8">
+              {pot > 0 && (
+                <>
+                  <div className="w-4 h-6 bg-red-500 rounded-full border border-red-700 shadow-sm"></div>
+                  <div className="w-4 h-5 bg-green-600 rounded-full border border-green-800 shadow-sm"></div>
+                  <div className="w-4 h-7 bg-blue-500 rounded-full border border-blue-700 shadow-sm"></div>
+                  {pot >= 100 && (
+                    <div className="w-4 h-4 bg-purple-500 rounded-full border border-purple-700 shadow-sm"></div>
+                  )}
+                  {pot >= 500 && (
+                    <div className="w-4 h-6 bg-yellow-400 rounded-full border border-yellow-600 shadow-sm"></div>
+                  )}
+                </>
+              )}
+              {pot === 0 && <div className="text-amber-600 text-xs italic">Vazio</div>}
+            </div>
+
+            {/* Pot animation overlay */}
+            <div className={`absolute inset-0 rounded-lg ${potAnimation} pointer-events-none`}></div>
+          </div>
+        </div>
+
         {/* Main Chip Display */}
         <div className="flex justify-center">
           <div
@@ -160,7 +244,6 @@ export default function PokerChipCounter() {
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-4">
           <Button
             onClick={() => openModal("bet")}
@@ -180,16 +263,47 @@ export default function PokerChipCounter() {
           </Button>
         </div>
 
-        {/* History */}
+        <div className="grid grid-cols-2 gap-4">
+          <Button
+            onClick={handleFold}
+            className="h-12 bg-gray-600 hover:bg-gray-700 text-white font-semibold shadow-lg"
+            disabled={pot === 0}
+          >
+            <X className="w-4 h-4 mr-2" />
+            Fold
+          </Button>
+
+          <Button
+            onClick={handleAllIn}
+            className="h-12 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold shadow-lg"
+            disabled={totalChips === 0}
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            All In
+          </Button>
+        </div>
+
         {history.length > 0 && (
           <Card className="p-4 bg-white/95 backdrop-blur">
             <h3 className="font-semibold mb-3 text-gray-900">Últimas Jogadas</h3>
             <div className="space-y-2">
               {history.map((action, index) => (
                 <div key={index} className="flex justify-between items-center text-sm">
-                  <span className={action.type === "win" ? "text-green-600" : "text-red-600"}>
-                    {action.type === "win" ? "+" : "-"}
-                    {action.amount} fichas
+                  <span
+                    className={
+                      action.type === "win"
+                        ? "text-green-600"
+                        : action.type === "fold"
+                          ? "text-gray-600"
+                          : action.type === "allin"
+                            ? "text-yellow-600"
+                            : "text-red-600"
+                    }
+                  >
+                    {action.type === "win" && `+${action.amount} fichas (ganhou)`}
+                    {action.type === "bet" && `-${action.amount} fichas (apostou)`}
+                    {action.type === "fold" && `Fold (perdeu ${action.amount})`}
+                    {action.type === "allin" && `All In (${action.amount} fichas)`}
                   </span>
                   <span className="text-gray-500">
                     {action.timestamp.toLocaleTimeString("pt-BR", {
@@ -205,7 +319,10 @@ export default function PokerChipCounter() {
 
         {/* Reset Button */}
         <Button
-          onClick={() => setIsInitialSetup(true)}
+          onClick={() => {
+            setIsInitialSetup(true)
+            setPot(0) // Reset pot on game restart
+          }}
           variant="outline"
           className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
         >
@@ -213,12 +330,15 @@ export default function PokerChipCounter() {
         </Button>
       </div>
 
-      {/* Chip Selection Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-sm mx-auto">
           <DialogHeader>
             <DialogTitle className="text-center">
-              {modalType === "bet" ? "Quanto apostar?" : "Quanto ganhou?"}
+              {modalType === "bet"
+                ? "Quanto apostar?"
+                : pot > 0
+                  ? `Pote: ${pot} fichas. Quantas fichas bônus ganhou?`
+                  : "Quanto ganhou?"}
             </DialogTitle>
           </DialogHeader>
 

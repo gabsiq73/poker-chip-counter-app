@@ -85,6 +85,16 @@
     <!-- Main Game Screen -->
     <div id="gameScreen" class="hidden min-h-screen p-4">
         <div class="max-w-md mx-auto space-y-8 pt-8">
+            <!-- Added pot display in top left corner -->
+            <div class="absolute top-4 left-4">
+                <div class="bg-white/95 backdrop-blur rounded-lg p-3 shadow-lg">
+                    <div class="text-center">
+                        <div class="text-xs font-semibold text-gray-600 mb-1">POTE</div>
+                        <div id="potValue" class="text-lg font-bold text-gray-900">0</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Main Chip Display -->
             <div class="flex justify-center">
                 <div id="mainChip" class="relative w-64 h-64 rounded-full flex items-center justify-center shadow-2xl transform transition-all duration-300">
@@ -105,7 +115,7 @@
                 </div>
             </div>
 
-            <!-- Action Buttons -->
+            <!-- Updated action buttons to include Fold and All In -->
             <div class="grid grid-cols-2 gap-4">
                 <button
                     id="betButton"
@@ -121,6 +131,24 @@
                 >
                     <span class="mr-2">+</span>
                     Ganhar
+                </button>
+            </div>
+
+            <!-- Added Fold and All In buttons -->
+            <div class="grid grid-cols-2 gap-4">
+                <button
+                    id="foldButton"
+                    onclick="fold()"
+                    class="h-12 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-md flex items-center justify-center transition-colors"
+                >
+                    Fold
+                </button>
+                <button
+                    id="allInButton"
+                    onclick="allIn()"
+                    class="h-12 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-md flex items-center justify-center transition-colors"
+                >
+                    All In
                 </button>
             </div>
 
@@ -151,8 +179,20 @@
         </div>
     </div>
 
+    <!-- Added win modal for selecting bonus chips -->
+    <div id="winModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-xl font-semibold text-center mb-4">Fichas ganhas na rodada</h2>
+            <div class="grid grid-cols-2 gap-3" id="winChipButtons"></div>
+            <button onclick="closeWinModal()" class="mt-4 w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-md transition-colors">
+                Cancelar
+            </button>
+        </div>
+    </div>
+
     <script>
         let totalChips = 0;
+        let pot = 0;
         let history = [];
         let currentModalType = 'bet';
         const chipValues = [1, 5, 25, 100, 500, 1000];
@@ -179,12 +219,25 @@
             chipValue.className = `text-5xl font-black drop-shadow-lg ${chipColor.text}`;
             chipLabel.className = `text-sm font-semibold opacity-90 tracking-wider ${chipColor.text}`;
             
-            // Update bet button state
+            document.getElementById('potValue').textContent = pot;
+            
+            // Update button states
             document.getElementById('betButton').disabled = totalChips === 0;
+            document.getElementById('allInButton').disabled = totalChips === 0;
+            document.getElementById('foldButton').disabled = pot === 0;
+            
             if (totalChips === 0) {
                 document.getElementById('betButton').className = 'h-16 bg-gray-400 text-white text-lg font-semibold rounded-md flex items-center justify-center cursor-not-allowed';
+                document.getElementById('allInButton').className = 'h-12 bg-gray-400 text-white text-sm font-semibold rounded-md flex items-center justify-center cursor-not-allowed';
             } else {
                 document.getElementById('betButton').className = 'h-16 bg-red-500 hover:bg-red-600 text-white text-lg font-semibold rounded-md flex items-center justify-center transition-colors';
+                document.getElementById('allInButton').className = 'h-12 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-md flex items-center justify-center transition-colors';
+            }
+            
+            if (pot === 0) {
+                document.getElementById('foldButton').className = 'h-12 bg-gray-400 text-white text-sm font-semibold rounded-md flex items-center justify-center cursor-not-allowed';
+            } else {
+                document.getElementById('foldButton').className = 'h-12 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-md flex items-center justify-center transition-colors';
             }
         }
 
@@ -205,6 +258,7 @@
         function startGame() {
             const initialChipsInput = document.getElementById('initialChips');
             totalChips = parseInt(initialChipsInput.value) || 100;
+            pot = 0;
             
             document.getElementById('setupScreen').classList.add('hidden');
             document.getElementById('gameScreen').classList.remove('hidden');
@@ -215,11 +269,57 @@
 
         function resetGame() {
             totalChips = 0;
+            pot = 0;
             history = [];
             document.getElementById('setupScreen').classList.remove('hidden');
             document.getElementById('gameScreen').classList.add('hidden');
             document.getElementById('initialChips').value = '';
             updateHistoryDisplay();
+        }
+
+        function fold() {
+            if (pot === 0) return;
+            
+            const action = {
+                type: 'fold',
+                amount: pot,
+                timestamp: new Date()
+            };
+            
+            pot = 0;
+            history.unshift(action);
+            if (history.length > 5) {
+                history = history.slice(0, 5);
+            }
+            
+            updateChipDisplay();
+            updateHistoryDisplay();
+        }
+
+        function allIn() {
+            if (totalChips === 0) return;
+            
+            const action = {
+                type: 'all-in',
+                amount: totalChips,
+                timestamp: new Date()
+            };
+            
+            pot += totalChips;
+            totalChips = 0;
+            
+            history.unshift(action);
+            if (history.length > 5) {
+                history = history.slice(0, 5);
+            }
+            
+            document.getElementById('mainChip').classList.add('chip-shake');
+            updateChipDisplay();
+            updateHistoryDisplay();
+            
+            setTimeout(() => {
+                document.getElementById('mainChip').classList.remove('chip-shake');
+            }, 800);
         }
 
         function openModal(type) {
@@ -228,9 +328,32 @@
             const modalTitle = document.getElementById('modalTitle');
             const chipButtons = document.getElementById('chipButtons');
             
-            modalTitle.textContent = type === 'bet' ? 'Quanto apostar?' : 'Quanto ganhou?';
+            modalTitle.textContent = type === 'bet' ? 'Quanto apostar?' : 'Ganhou a rodada!';
             
             chipButtons.innerHTML = '';
+            
+            if (type === 'win') {
+                if (pot > 0) {
+                    totalChips += pot;
+                    const potAction = {
+                        type: 'pot-win',
+                        amount: pot,
+                        timestamp: new Date()
+                    };
+                    history.unshift(potAction);
+                    pot = 0;
+                    
+                    document.getElementById('mainChip').classList.add('chip-glow');
+                    setTimeout(() => {
+                        document.getElementById('mainChip').classList.remove('chip-glow');
+                    }, 800);
+                }
+                
+                closeModal();
+                openWinModal();
+                return;
+            }
+            
             chipValues.forEach(value => {
                 const canUse = type === 'win' || totalChips >= value;
                 const chipColor = getChipColor(value);
@@ -247,8 +370,54 @@
             modal.classList.add('show');
         }
 
+        function openWinModal() {
+            const winModal = document.getElementById('winModal');
+            const winChipButtons = document.getElementById('winChipButtons');
+            
+            winChipButtons.innerHTML = '';
+            chipValues.forEach(value => {
+                const chipColor = getChipColor(value);
+                
+                const button = document.createElement('button');
+                button.textContent = value;
+                button.onclick = () => handleWinBonus(value);
+                button.className = `h-16 rounded-full border-4 font-bold text-lg transition-transform hover:scale-105 ${chipColor.bg} ${chipColor.text}`;
+                
+                winChipButtons.appendChild(button);
+            });
+            
+            winModal.classList.add('show');
+        }
+
         function closeModal() {
             document.getElementById('chipModal').classList.remove('show');
+        }
+
+        function closeWinModal() {
+            document.getElementById('winModal').classList.remove('show');
+            updateChipDisplay();
+            updateHistoryDisplay();
+        }
+
+        function handleWinBonus(amount) {
+            const action = {
+                type: 'win-bonus',
+                amount: amount,
+                timestamp: new Date()
+            };
+            
+            totalChips += amount;
+            history.unshift(action);
+            if (history.length > 5) {
+                history = history.slice(0, 5);
+            }
+            
+            document.getElementById('mainChip').classList.add('chip-glow');
+            closeWinModal();
+            
+            setTimeout(() => {
+                document.getElementById('mainChip').classList.remove('chip-glow');
+            }, 800);
         }
 
         function handleChipAction(amount) {
@@ -260,10 +429,8 @@
 
             if (currentModalType === 'bet') {
                 totalChips = Math.max(0, totalChips - amount);
+                pot += amount;
                 document.getElementById('mainChip').classList.add('chip-shake');
-            } else {
-                totalChips += amount;
-                document.getElementById('mainChip').classList.add('chip-glow');
             }
 
             history.unshift(action);
@@ -298,8 +465,37 @@
                 item.className = 'flex justify-between items-center text-sm';
                 
                 const actionText = document.createElement('span');
-                actionText.className = action.type === 'win' ? 'text-green-600' : 'text-red-600';
-                actionText.textContent = `${action.type === 'win' ? '+' : '-'}${action.amount} fichas`;
+                let text = '';
+                let colorClass = '';
+                
+                switch(action.type) {
+                    case 'bet':
+                        text = `-${action.amount} fichas (aposta)`;
+                        colorClass = 'text-red-600';
+                        break;
+                    case 'win-bonus':
+                        text = `+${action.amount} fichas (bônus)`;
+                        colorClass = 'text-green-600';
+                        break;
+                    case 'pot-win':
+                        text = `+${action.amount} fichas (pote)`;
+                        colorClass = 'text-blue-600';
+                        break;
+                    case 'fold':
+                        text = `-${action.amount} fichas (fold)`;
+                        colorClass = 'text-gray-600';
+                        break;
+                    case 'all-in':
+                        text = `-${action.amount} fichas (all-in)`;
+                        colorClass = 'text-orange-600';
+                        break;
+                    default:
+                        text = `${action.type === 'win' ? '+' : '-'}${action.amount} fichas`;
+                        colorClass = action.type === 'win' ? 'text-green-600' : 'text-red-600';
+                }
+                
+                actionText.className = colorClass;
+                actionText.textContent = text;
                 
                 const timeText = document.createElement('span');
                 timeText.className = 'text-gray-500';
@@ -314,10 +510,16 @@
             });
         }
 
-        // Close modal when clicking outside
+        // Close modals when clicking outside
         document.getElementById('chipModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeModal();
+            }
+        });
+
+        document.getElementById('winModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeWinModal();
             }
         });
     </script>
